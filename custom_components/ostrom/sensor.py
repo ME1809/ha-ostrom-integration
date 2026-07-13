@@ -9,6 +9,7 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, Sen
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -48,7 +49,16 @@ def _parse_date(item: dict[str, Any]) -> datetime:
 
 
 class OstromBaseSensor(CoordinatorEntity[OstromSpotPriceCoordinator], SensorEntity):
-    """Base class sharing device info and null-safe access to coordinator data."""
+    """Base class sharing device info and null-safe access to coordinator data.
+
+    Sets entity_id explicitly: entities tied to a device otherwise get
+    Home Assistant's auto-suggested id ("sensor.<device_name>_<entity_name>"),
+    which would silently break the documented sensor.ostrom_energy_spotpreis
+    contract (used by the apexcharts-card example) as soon as the device
+    name changes (e.g. a different zip code).
+    """
+
+    _object_id: str
 
     def __init__(self, coordinator: OstromSpotPriceCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -57,6 +67,9 @@ class OstromBaseSensor(CoordinatorEntity[OstromSpotPriceCoordinator], SensorEnti
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
             manufacturer=MANUFACTURER,
+        )
+        self.entity_id = generate_entity_id(
+            "sensor.{}", self._object_id, hass=coordinator.hass
         )
 
     @property
@@ -75,6 +88,7 @@ class OstromForecastSensor(OstromBaseSensor):
     _attr_name = "Ostrom Energy Spotpreis"
     _attr_native_unit_of_measurement = PRICE_UNIT
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _object_id = "ostrom_energy_spotpreis"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
@@ -100,6 +114,7 @@ class OstromNextPriceSensor(OstromBaseSensor):
     _attr_name = "Ostrom Next Price"
     _attr_native_unit_of_measurement = PRICE_UNIT
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _object_id = "ostrom_next_price"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
@@ -121,6 +136,7 @@ class OstromAveragePriceSensor(OstromBaseSensor):
     _attr_name = "Ostrom Average Price"
     _attr_native_unit_of_measurement = PRICE_UNIT
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _object_id = "ostrom_average_price"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
@@ -138,6 +154,7 @@ class OstromMinPriceSensor(OstromBaseSensor):
     _attr_name = "Ostrom Min Price"
     _attr_native_unit_of_measurement = PRICE_UNIT
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _object_id = "ostrom_min_price"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
@@ -155,6 +172,7 @@ class OstromMaxPriceSensor(OstromBaseSensor):
     _attr_name = "Ostrom Max Price"
     _attr_native_unit_of_measurement = PRICE_UNIT
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _object_id = "ostrom_max_price"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
@@ -171,6 +189,7 @@ class OstromMaxPriceSensor(OstromBaseSensor):
 class OstromLowestPriceTimeSensor(OstromBaseSensor):
     _attr_name = "Ostrom Lowest Price Time"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _object_id = "ostrom_lowest_price_time"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
@@ -187,6 +206,7 @@ class OstromLowestPriceTimeSensor(OstromBaseSensor):
 class OstromHighestPriceTimeSensor(OstromBaseSensor):
     _attr_name = "Ostrom Highest Price Time"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _object_id = "ostrom_highest_price_time"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
