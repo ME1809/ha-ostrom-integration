@@ -67,4 +67,6 @@ class OstromSpotPriceCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
 
 
 def _iso(value: datetime) -> str:
-    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Ostrom's docs specify this exact format, milliseconds included
+    # (e.g. "2023-11-01T00:00:00.000Z") - omitting them causes a 400.
+    return value.strftime("%Y-%m-%dT%H:%M:%S.000Z")

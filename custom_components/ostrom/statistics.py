@@ -129,4 +129,6 @@ def _accumulate(statistics: list[StatisticData], item: dict[str, Any], running_s
 
 
 def _iso(value) -> str:
-    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Ostrom's docs specify this exact format, milliseconds included
+    # (e.g. "2023-11-01T00:00:00.000Z") - omitting them causes a 400.
+    return value.strftime("%Y-%m-%dT%H:%M:%S.000Z")
