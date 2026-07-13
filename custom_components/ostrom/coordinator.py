@@ -35,10 +35,14 @@ class OstromSpotPriceCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         self._zip_code = entry.data[CONF_ZIP_CODE]
 
     async def _async_update_data(self) -> list[dict[str, Any]]:
-        start = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
-        # Ostrom publishes next-day prices from ~14:00; ask for a wide-enough
-        # window and simply use whatever the API has actually published.
-        end = start + timedelta(hours=48)
+        # Ostrom only ever publishes prices through the end of "today" (before
+        # ~14:00 local) or "tomorrow" (after ~14:00 local). Requesting a fixed
+        # now+48h window can reach into a third calendar day and gets rejected
+        # with HTTP 400 - ask for today+tomorrow in local time instead, and
+        # simply use whatever the API has actually published within that.
+        today_start = dt_util.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        start = dt_util.as_utc(today_start)
+        end = dt_util.as_utc(today_start + timedelta(days=2))
         try:
             response = await self._client.async_get(
                 "/spot-prices",

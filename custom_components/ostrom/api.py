@@ -83,8 +83,14 @@ class OstromApiClient:
                         )
                         await asyncio.sleep(delay)
                         continue
-                    resp.raise_for_status()
+                    if resp.status >= 400:
+                        detail = await resp.text()
+                        raise OstromApiError(
+                            f"Ostrom API request to {path} failed with HTTP {resp.status}: {detail}"
+                        )
                     return await resp.json()
+            except OstromApiError:
+                raise
             except (aiohttp.ClientError, asyncio.TimeoutError) as err:
                 last_error = err
                 if attempt < HTTP_MAX_ATTEMPTS:
