@@ -119,16 +119,24 @@ class OstromApiClient:
                             f"Ostrom rejected the credentials (HTTP {resp.status})"
                         )
                     if resp.status == 429:
+                        detail = await resp.text()
+                        last_error = OstromApiError(f"rate-limited (HTTP 429): {detail}")
                         delay = _retry_delay(resp.headers.get("Retry-After"), attempt)
                         _LOGGER.debug(
                             "Ostrom token endpoint rate-limited, retrying in %.1fs", delay
                         )
                         await asyncio.sleep(delay)
                         continue
-                    resp.raise_for_status()
+                    if resp.status >= 400:
+                        detail = await resp.text()
+                        raise OstromApiError(
+                            f"Ostrom token endpoint returned HTTP {resp.status}: {detail}"
+                        )
                     payload = await resp.json()
                     return payload["access_token"]
             except OstromAuthError:
+                raise
+            except OstromApiError:
                 raise
             except (aiohttp.ClientError, asyncio.TimeoutError) as err:
                 last_error = err
