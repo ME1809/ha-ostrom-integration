@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ostrom",
+        "description": "Gib deine Ostrom API Client-Zugangsdaten (aus dem Ostrom Developer Portal) und deine Postleitzahl ein.",
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client Secret",
+          "zip_code": "Postleitzahl",
+          "environment": "Umgebung"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ungültige Client ID oder Client Secret.",
+      "cannot_connect": "Verbindung zur Ostrom API fehlgeschlagen. Bitte erneut versuchen."
+    },
+    "abort": {
+      "already_configured": "Dieser Ostrom-Account mit dieser Postleitzahl ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client Secret",
+          "zip_code": "Postleitzahl",
+          "environment": "Umgebung"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ungültige Client ID oder Client Secret.",
+      "cannot_connect": "Verbindung zur Ostrom API fehlgeschlagen. Bitte erneut versuchen."
+    }
+  }
+}

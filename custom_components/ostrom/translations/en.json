@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ostrom",
+        "description": "Enter your Ostrom API client credentials (from the Ostrom Developer Portal) and your zip code.",
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client Secret",
+          "zip_code": "Zip code",
+          "environment": "Environment"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid client ID or client secret.",
+      "cannot_connect": "Could not connect to the Ostrom API. Please try again."
+    },
+    "abort": {
+      "already_configured": "This Ostrom account and zip code are already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client Secret",
+          "zip_code": "Zip code",
+          "environment": "Environment"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid client ID or client secret.",
+      "cannot_connect": "Could not connect to the Ostrom API. Please try again."
+    }
+  }
+}
