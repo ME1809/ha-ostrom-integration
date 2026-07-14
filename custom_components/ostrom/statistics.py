@@ -6,7 +6,11 @@ import logging
 from datetime import timedelta
 from typing import Any
 
-from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
+from homeassistant.components.recorder.models import (
+    StatisticData,
+    StatisticMeanType,
+    StatisticMetaData,
+)
 from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
     get_last_statistics,
@@ -67,15 +71,37 @@ async def _async_import_once(
         get_last_statistics, hass, 1, STATISTIC_ID_CONSUMPTION, True, {"sum"}
     )
     existing = last_stats.get(STATISTIC_ID_CONSUMPTION)
+    fresh_lookback = dt_util.utcnow() - timedelta(days=CONSUMPTION_MAX_DAYS_PER_REQUEST)
     if existing:
         start = dt_util.utc_from_timestamp(existing[0]["start"]) + timedelta(hours=1)
         running_sum = existing[0]["sum"] or 0.0
+        # Defensive: get_last_statistics() should hand back a sane recent
+        # timestamp. If it ever doesn't (e.g. a units mismatch), this branch
+        # would otherwise short-circuit forever below without logging
+        # anything - self-heal by falling back to a fresh lookback instead.
+        if start > dt_util.utcnow() + timedelta(days=1):
+            _LOGGER.warning(
+                "Ostrom consumption continuation point %s is implausible "
+                "(last recorded start=%s); falling back to a %s-day lookback",
+                start,
+                existing[0]["start"],
+                CONSUMPTION_MAX_DAYS_PER_REQUEST,
+            )
+            start = fresh_lookback
+            running_sum = 0.0
     else:
-        start = dt_util.utcnow() - timedelta(days=CONSUMPTION_MAX_DAYS_PER_REQUEST)
+        start = fresh_lookback
         running_sum = 0.0
 
     end = dt_util.utcnow()
+    _LOGGER.debug(
+        "Ostrom consumption import: fetching %s to %s (existing=%s)",
+        start,
+        end,
+        bool(existing),
+    )
     if start >= end:
+        _LOGGER.debug("Ostrom consumption import: nothing to do (start >= end)")
         return
 
     statistics: list[StatisticData] = []
@@ -103,10 +129,19 @@ async def _async_import_once(
             await asyncio.sleep(CONSUMPTION_REQUEST_CHUNK_DELAY)
 
     if not statistics:
+        _LOGGER.debug(
+            "Ostrom consumption import: Ostrom returned no new readings for %s to %s "
+            "(smart-meter data is typically published with a reporting delay)",
+            start,
+            end,
+        )
         return
+
+    _LOGGER.debug("Ostrom consumption import: adding %d new hourly readings", len(statistics))
 
     metadata = StatisticMetaData(
         has_mean=False,
+        mean_type=StatisticMeanType.NONE,
         has_sum=True,
         name=f"{entry.title} Consumption",
         source=DOMAIN,

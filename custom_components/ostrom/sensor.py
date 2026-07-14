@@ -272,7 +272,9 @@ class OstromDailyConsumptionSensor(OstromConsumptionBaseSensor):
     _attr_name = "Ostrom Verbrauch heute"
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    # device_class=energy only allows total/total_increasing, not measurement;
+    # "total" also correctly allows this to reset/drop at local midnight.
+    _attr_state_class = SensorStateClass.TOTAL
     _object_id = "ostrom_consumption_today"
 
     def __init__(self, coordinator, entry):
@@ -301,7 +303,8 @@ class OstromWeeklyConsumptionSensor(OstromConsumptionBaseSensor):
     _attr_name = "Ostrom Verbrauch Woche"
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    # device_class=energy only allows total/total_increasing, not measurement.
+    _attr_state_class = SensorStateClass.TOTAL
     _object_id = "ostrom_consumption_week"
 
     def __init__(self, coordinator, entry):
