@@ -37,6 +37,10 @@ class OstromApiError(Exception):
     """Raised when a request fails after all retries."""
 
 
+class OstromNoActiveContractError(Exception):
+    """Raised when the account has no active Ostrom contract."""
+
+
 class OstromApiClient:
     """Thin async client for the Ostrom API."""
 
@@ -58,6 +62,15 @@ class OstromApiClient:
     async def async_validate_credentials(self) -> dict[str, Any]:
         """Validate credentials by obtaining a token and calling /me."""
         return await self.async_get("/me")
+
+    async def async_get_active_contract_id(self) -> int:
+        """Look up the customer's active contract id (shared by consumption fetches)."""
+        response = await self.async_get("/contracts")
+        contracts = response.get("data") or []
+        contract = next((c for c in contracts if c.get("status") == "ACTIVE"), None)
+        if contract is None:
+            raise OstromNoActiveContractError("No active Ostrom contract found for this account")
+        return contract["id"]
 
     async def async_get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         """GET a path from the Ostrom API, retrying on 429 and transient errors."""

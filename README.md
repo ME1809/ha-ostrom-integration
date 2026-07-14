@@ -33,6 +33,8 @@ to fix several issues found in the original during review — see
 | `sensor.ostrom_average_price` | Average price across the available forecast window |
 | `sensor.ostrom_min_price` / `sensor.ostrom_max_price` | Lowest / highest price in the forecast window |
 | `sensor.ostrom_lowest_price_time` / `sensor.ostrom_highest_price_time` | Timestamp of the lowest / highest price |
+| `sensor.ostrom_consumption_today` | Smart-meter consumption so far today (kWh) |
+| `sensor.ostrom_consumption_week` | Rolling 7-day smart-meter consumption (kWh) |
 
 ## Installation
 

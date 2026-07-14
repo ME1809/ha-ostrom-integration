@@ -10,6 +10,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import OstromApiClient
 from .const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, CONF_ENVIRONMENT, DOMAIN
+from .consumption_coordinator import OstromConsumptionCoordinator
 from .coordinator import OstromSpotPriceCoordinator
 from .statistics import async_start_consumption_import
 
@@ -27,10 +28,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data[CONF_ENVIRONMENT],
     )
 
-    coordinator = OstromSpotPriceCoordinator(hass, entry, client)
-    await coordinator.async_config_entry_first_refresh()
+    price_coordinator = OstromSpotPriceCoordinator(hass, entry, client)
+    await price_coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    consumption_coordinator = OstromConsumptionCoordinator(hass, entry, client)
+    await consumption_coordinator.async_config_entry_first_refresh()
+
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+        "prices": price_coordinator,
+        "consumption": consumption_coordinator,
+    }
 
     entry.async_on_unload(async_start_consumption_import(hass, entry, client))
 

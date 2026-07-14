@@ -16,7 +16,12 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
-from .api import OstromApiClient, OstromApiError, OstromAuthError
+from .api import (
+    OstromApiClient,
+    OstromApiError,
+    OstromAuthError,
+    OstromNoActiveContractError,
+)
 from .const import (
     CONSUMPTION_MAX_DAYS_PER_REQUEST,
     CONSUMPTION_REQUEST_CHUNK_DELAY,
@@ -48,20 +53,15 @@ async def _async_import_once(
     hass: HomeAssistant, entry: ConfigEntry, client: OstromApiClient
 ) -> None:
     try:
-        contracts_response = await client.async_get("/contracts")
-    except (OstromAuthError, OstromApiError) as err:
-        _LOGGER.warning("Could not fetch Ostrom contracts: %s", err)
-        return
-
-    contracts = contracts_response.get("data") or []
-    contract = next((c for c in contracts if c.get("status") == "ACTIVE"), None)
-    if contract is None:
+        contract_id = await client.async_get_active_contract_id()
+    except OstromNoActiveContractError:
         _LOGGER.warning(
             "No active Ostrom contract found for this account; skipping consumption import"
         )
         return
-
-    contract_id = contract["id"]
+    except (OstromAuthError, OstromApiError) as err:
+        _LOGGER.warning("Could not fetch Ostrom contracts: %s", err)
+        return
 
     last_stats = await hass.async_add_executor_job(
         get_last_statistics, hass, 1, STATISTIC_ID_CONSUMPTION, True, {"sum"}

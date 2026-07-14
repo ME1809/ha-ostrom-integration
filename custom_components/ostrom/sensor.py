@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import generate_entity_id
@@ -15,6 +16,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, MANUFACTURER
+from .consumption_coordinator import OstromConsumptionCoordinator
 from .coordinator import OstromSpotPriceCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,17 +27,21 @@ PRICE_UNIT = "ct/kWh"
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator: OstromSpotPriceCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinators = hass.data[DOMAIN][entry.entry_id]
+    price_coordinator: OstromSpotPriceCoordinator = coordinators["prices"]
+    consumption_coordinator: OstromConsumptionCoordinator = coordinators["consumption"]
 
     async_add_entities(
         [
-            OstromForecastSensor(coordinator, entry),
-            OstromNextPriceSensor(coordinator, entry),
-            OstromAveragePriceSensor(coordinator, entry),
-            OstromMinPriceSensor(coordinator, entry),
-            OstromMaxPriceSensor(coordinator, entry),
-            OstromLowestPriceTimeSensor(coordinator, entry),
-            OstromHighestPriceTimeSensor(coordinator, entry),
+            OstromForecastSensor(price_coordinator, entry),
+            OstromNextPriceSensor(price_coordinator, entry),
+            OstromAveragePriceSensor(price_coordinator, entry),
+            OstromMinPriceSensor(price_coordinator, entry),
+            OstromMaxPriceSensor(price_coordinator, entry),
+            OstromLowestPriceTimeSensor(price_coordinator, entry),
+            OstromHighestPriceTimeSensor(price_coordinator, entry),
+            OstromDailyConsumptionSensor(consumption_coordinator, entry),
+            OstromWeeklyConsumptionSensor(consumption_coordinator, entry),
         ]
     )
 
@@ -48,8 +54,8 @@ def _parse_date(item: dict[str, Any]) -> datetime:
     return dt_util.parse_datetime(item["date"])
 
 
-class OstromBaseSensor(CoordinatorEntity[OstromSpotPriceCoordinator], SensorEntity):
-    """Base class sharing device info and null-safe access to coordinator data.
+class _OstromEntityMixin:
+    """Shared device info + explicit entity_id setup for all Ostrom sensors.
 
     Sets entity_id explicitly: entities tied to a device otherwise get
     Home Assistant's auto-suggested id ("sensor.<device_name>_<entity_name>"),
@@ -60,8 +66,7 @@ class OstromBaseSensor(CoordinatorEntity[OstromSpotPriceCoordinator], SensorEnti
 
     _object_id: str
 
-    def __init__(self, coordinator: OstromSpotPriceCoordinator, entry: ConfigEntry) -> None:
-        super().__init__(coordinator)
+    def _init_ostrom_entity(self, entry: ConfigEntry) -> None:
         self._entry = entry
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -69,8 +74,18 @@ class OstromBaseSensor(CoordinatorEntity[OstromSpotPriceCoordinator], SensorEnti
             manufacturer=MANUFACTURER,
         )
         self.entity_id = generate_entity_id(
-            "sensor.{}", self._object_id, hass=coordinator.hass
+            "sensor.{}", self._object_id, hass=self.coordinator.hass
         )
+
+
+class OstromBaseSensor(
+    _OstromEntityMixin, CoordinatorEntity[OstromSpotPriceCoordinator], SensorEntity
+):
+    """Base class for price sensors: null-safe access to the price forecast."""
+
+    def __init__(self, coordinator: OstromSpotPriceCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._init_ostrom_entity(entry)
 
     @property
     def _prices(self) -> list[dict[str, Any]]:
@@ -80,6 +95,25 @@ class OstromBaseSensor(CoordinatorEntity[OstromSpotPriceCoordinator], SensorEnti
     @property
     def available(self) -> bool:
         return super().available and bool(self._prices)
+
+
+class OstromConsumptionBaseSensor(
+    _OstromEntityMixin, CoordinatorEntity[OstromConsumptionCoordinator], SensorEntity
+):
+    """Base class for consumption sensors: null-safe access to the reading window."""
+
+    def __init__(self, coordinator: OstromConsumptionCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._init_ostrom_entity(entry)
+
+    @property
+    def _readings(self) -> list[dict[str, Any]]:
+        """Return the cached reading list, or an empty list if none is available yet."""
+        return self.coordinator.data or []
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self._readings)
 
 
 class OstromForecastSensor(OstromBaseSensor):
@@ -218,3 +252,73 @@ class OstromHighestPriceTimeSensor(OstromBaseSensor):
         if not prices:
             return None
         return _parse_date(max(prices, key=_price_ct))
+
+
+def _reading_kwh(reading: dict[str, Any]) -> float | None:
+    return reading.get("kWh")
+
+
+def _reading_local_dt(reading: dict[str, Any]) -> datetime | None:
+    date = reading.get("date")
+    if date is None:
+        return None
+    parsed = dt_util.parse_datetime(date)
+    return dt_util.as_local(parsed) if parsed else None
+
+
+class OstromDailyConsumptionSensor(OstromConsumptionBaseSensor):
+    """Today's smart-meter consumption so far - handy to cross-check against other meters."""
+
+    _attr_name = "Ostrom Verbrauch heute"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _object_id = "ostrom_consumption_today"
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_consumption_today"
+
+    @property
+    def native_value(self) -> float | None:
+        readings = self._readings
+        if not readings:
+            return None
+        today = dt_util.now().date()
+        total = sum(
+            kwh
+            for r in readings
+            if (kwh := _reading_kwh(r)) is not None
+            and (local_dt := _reading_local_dt(r)) is not None
+            and local_dt.date() == today
+        )
+        return round(total, 3)
+
+
+class OstromWeeklyConsumptionSensor(OstromConsumptionBaseSensor):
+    """Rolling 7-day smart-meter consumption - handy to cross-check against other meters."""
+
+    _attr_name = "Ostrom Verbrauch Woche"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _object_id = "ostrom_consumption_week"
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_consumption_week"
+
+    @property
+    def native_value(self) -> float | None:
+        readings = self._readings
+        if not readings:
+            return None
+        cutoff = dt_util.now() - timedelta(days=7)
+        total = sum(
+            kwh
+            for r in readings
+            if (kwh := _reading_kwh(r)) is not None
+            and (local_dt := _reading_local_dt(r)) is not None
+            and local_dt >= cutoff
+        )
+        return round(total, 3)

@@ -31,6 +31,10 @@ CONSUMPTION_MAX_DAYS_PER_REQUEST = 30
 CONSUMPTION_REQUEST_CHUNK_DELAY = 3  # seconds between chunk requests (rate-limit friendly)
 STATISTIC_ID_CONSUMPTION = f"{DOMAIN}:{DOMAIN}_hourly_consumption_energy"
 
+# Rolling window (in days) fetched for the visible "today"/"this week" consumption
+# sensors - a bit more than 7 days to tolerate the smart-meter's reporting lag.
+CONSUMPTION_ROLLING_WINDOW_DAYS = 8
+
 # Retry/backoff shared by every HTTP call the integration makes.
 HTTP_MAX_ATTEMPTS = 4
 HTTP_BACKOFF_BASE = 5  # seconds
